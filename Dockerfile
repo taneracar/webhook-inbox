@@ -2,9 +2,11 @@ FROM python:3.13-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /srv
 
+# Dependencies first (cached layer), then the code.
 COPY pyproject.toml ./
-RUN pip install --upgrade pip && pip install .
+RUN pip install --upgrade pip && python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))" > /tmp/req.txt && pip install -r /tmp/req.txt
 COPY app ./app
+RUN pip install --no-deps .
 
 # Never run as root.
 RUN useradd --create-home --uid 10001 inbox && mkdir -p /data && chown inbox /data
