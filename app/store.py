@@ -84,10 +84,14 @@ class Store:
         pick = select(events.c.id).where(due).order_by(events.c.next_attempt_at, events.c.id).limit(limit)
         if self.dialect == "postgresql":
             pick = pick.with_for_update(skip_locked=True)
+        # A CTE, not `WHERE id IN (SELECT ... LIMIT n)`: Postgres does not
+        # promise to run an IN-subquery once, and in CI it claimed 7 rows with
+        # a limit of 3. A data-modifying statement's CTE is evaluated once.
+        picked = pick.cte("picked")
         token = str(uuid.uuid4())
         stmt = (
             update(events)
-            .where(events.c.id.in_(pick.scalar_subquery()), due)
+            .where(events.c.id == picked.c.id, due)
             .values(
                 status="processing", attempts=events.c.attempts + 1, locked_until=now_ms + lease_ms, lease_token=token
             )

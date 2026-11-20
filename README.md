@@ -44,6 +44,8 @@ worker ◀── UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED) RETU
 
 CI runs the suite on **SQLite and Postgres 17**, on Python 3.12 and 3.13, plus ruff lint/format and a Docker build that must answer `/health` as a non-root user.
 
+The Postgres job earned its place on the first run: the original claim used `UPDATE … WHERE id IN (SELECT … LIMIT n FOR UPDATE SKIP LOCKED)`, and on Postgres a worker asked for 3 events claimed 7. Postgres does not promise to evaluate an `IN` subquery once. SQLite passed. The claim now selects through a CTE, which a data-modifying statement evaluates exactly once, and the batch-size test guards it.
+
 Checked against deliberate breakage: removing the lease-token guard, the `ON CONFLICT` clause, the timestamp window, the attempt limit, or `Retry-After` handling each makes at least one test fail.
 
 Also run by hand against real processes (uvicorn API, `python -m app.worker`, and a throwaway downstream that returns 503 once): the event was accepted (202), the duplicate acknowledged (200), a bad signature refused (401), and the worker delivered on the second attempt after the 503, with history `['retry', 'ok']`.
